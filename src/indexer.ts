@@ -52,18 +52,31 @@ export async function startFullIndexing(): Promise<IndexingResult> {
   const start = performance.now();
 
   // Get all notes from Apple Notes
+  console.error("📝 Fetching all notes from Apple Notes...");
   const notes = await getAllNotesWithDetails();
   const totalNotes = notes.length;
+  console.error(`✅ Found ${totalNotes} notes`);
 
   // Create job record
+  console.error("💾 Creating indexing job record...");
   const jobId = await createIndexingJob(totalNotes);
+  console.error(`✅ Job #${jobId} created`);
+
+  // Pre-load embedding model before batch processing
+  console.error("🤖 Pre-loading embedding model...");
+  await preloadModel();
 
   // Process notes in batches
   let processedNotes = 0;
   let failedNotes = 0;
 
+  console.error(`🔄 Processing ${totalNotes} notes in batches of ${BATCH_SIZE}...`);
+  const processingStart = performance.now();
+
   for (let i = 0; i < notes.length; i += BATCH_SIZE) {
     const batch = notes.slice(i, i + BATCH_SIZE);
+    const batchStart = performance.now();
+    console.error(`  Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(notes.length / BATCH_SIZE)}: Processing notes ${i + 1}-${Math.min(i + BATCH_SIZE, notes.length)}...`);
 
     const batchResults = await Promise.allSettled(
       batch.map(async (note) => {
@@ -83,6 +96,9 @@ export async function startFullIndexing(): Promise<IndexingResult> {
 
     // Update progress
     await updateJobProgress(jobId, processedNotes, failedNotes);
+    const batchTime = Math.round(performance.now() - batchStart);
+    const avgPerNote = Math.round(batchTime / batch.length);
+    console.error(`  ✅ Progress: ${processedNotes}/${totalNotes} (${failedNotes} failed) - Batch time: ${batchTime}ms (${avgPerNote}ms/note)`);
   }
 
   // Complete job
@@ -90,6 +106,7 @@ export async function startFullIndexing(): Promise<IndexingResult> {
   await completeJob(jobId, status);
 
   const timeMs = performance.now() - start;
+  console.error(`🎉 Indexing complete in ${Math.round(timeMs)}ms`);
 
   return {
     jobId,

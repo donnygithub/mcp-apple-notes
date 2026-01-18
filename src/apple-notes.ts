@@ -27,13 +27,19 @@ export function generateContentHash(content: string): string {
 
 /**
  * Get all note titles (lightweight)
+ * Excludes notes in trash (Recently Deleted)
  */
 export async function getNotes(): Promise<string[]> {
   const notes = await runJxa(`
     const app = Application('Notes');
     app.includeStandardAdditions = true;
     const notes = Array.from(app.notes());
-    const titles = notes.map(note => note.properties().name);
+    const titles = notes
+      .filter(note => {
+        const container = note.container();
+        return container ? container.name() !== 'Recently Deleted' : true;
+      })
+      .map(note => note.properties().name);
     return titles;
   `);
   return notes as string[];
@@ -41,22 +47,26 @@ export async function getNotes(): Promise<string[]> {
 
 /**
  * Get all notes with summary info (for incremental sync)
+ * Excludes notes in trash (Recently Deleted)
  */
 export async function getAllNotesSummary(): Promise<AppleNoteSummary[]> {
   const result = await runJxa(`
     const app = Application('Notes');
     app.includeStandardAdditions = true;
     const notes = Array.from(app.notes());
-    const summaries = notes.map(note => {
-      const props = note.properties();
-      const container = note.container();
-      return {
-        id: props.id,
-        title: props.name,
-        folder: container ? container.name() : 'Notes',
-        modification_date: props.modificationDate.toISOString()
-      };
-    });
+    const summaries = notes
+      .map(note => {
+        const props = note.properties();
+        const container = note.container();
+        const folderName = container ? container.name() : 'Notes';
+        return {
+          id: props.id,
+          title: props.name,
+          folder: folderName,
+          modification_date: props.modificationDate.toISOString()
+        };
+      })
+      .filter(note => note.folder !== 'Recently Deleted');
     return JSON.stringify(summaries);
   `);
   return JSON.parse(result as string) as AppleNoteSummary[];
