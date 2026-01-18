@@ -12,11 +12,11 @@ import {
   updateJobProgress,
   completeJob,
   getJobStatus,
-  getAllNoteHashes,
+  getAllNoteMetadata,
   deleteNotesByAppleIds,
   type IndexingJob,
 } from "./db.js";
-import { generateEmbedding, prepareTextForEmbedding } from "./embeddings.js";
+import { generateEmbedding, prepareTextForEmbedding, preloadModel } from "./embeddings.js";
 
 const turndown = new TurndownService();
 
@@ -107,35 +107,44 @@ export async function startFullIndexing(): Promise<IndexingResult> {
 export async function syncNotes(): Promise<IndexingResult> {
   const start = performance.now();
 
-  // Get current state from Apple Notes
+  // Get current state from Apple Notes (lightweight - just summaries)
+  console.error("🔍 Fetching note summaries from Apple Notes...");
   const appleSummaries = await getAllNotesSummary();
   const appleNoteIds = new Set(appleSummaries.map((s) => s.id));
+  console.error(`   Found ${appleSummaries.length} notes in Apple Notes`);
 
-  // Get existing hashes from database
-  const existingHashes = await getAllNoteHashes();
+  // Get existing metadata from database (hash + modification date)
+  const existingMetadata = await getAllNoteMetadata();
+  console.error(`   Found ${existingMetadata.size} notes in database`);
 
   // Determine what needs updating
   const notesToUpdate: string[] = [];
   const notesToDelete: string[] = [];
 
   // Check for deleted notes
-  for (const [dbNoteId] of existingHashes) {
+  for (const [dbNoteId] of existingMetadata) {
     if (!appleNoteIds.has(dbNoteId)) {
       notesToDelete.push(dbNoteId);
     }
   }
 
-  // Check for new or modified notes
+  // Check for new or modified notes using modification date
   for (const summary of appleSummaries) {
-    const existingHash = existingHashes.get(summary.id);
-    if (!existingHash) {
+    const existing = existingMetadata.get(summary.id);
+    if (!existing) {
       // New note
       notesToUpdate.push(summary.id);
     } else {
-      // Check if modified (we'll verify hash after fetching content)
-      notesToUpdate.push(summary.id);
+      // Compare modification dates - only fetch if Apple's date is newer
+      const appleModDate = new Date(summary.modification_date);
+      if (appleModDate > existing.modificationDate) {
+        notesToUpdate.push(summary.id);
+      }
+      // If dates match, skip (no need to fetch via JXA)
     }
   }
+
+  console.error(`📊 Sync analysis: ${notesToUpdate.length} to update, ${notesToDelete.length} to delete`);
 
   // Create job
   const totalNotes = notesToUpdate.length + notesToDelete.length;
@@ -146,26 +155,29 @@ export async function syncNotes(): Promise<IndexingResult> {
 
   // Delete removed notes
   if (notesToDelete.length > 0) {
+    console.error(`🗑️  Deleting ${notesToDelete.length} removed notes...`);
     await deleteNotesByAppleIds(notesToDelete);
     processedNotes += notesToDelete.length;
     await updateJobProgress(jobId, processedNotes, failedNotes);
   }
 
+  // Pre-load embedding model if there are notes to update
+  if (notesToUpdate.length > 0) {
+    console.error("🤖 Pre-loading embedding model...");
+    await preloadModel();
+  }
+
   // Process updates in batches
   for (let i = 0; i < notesToUpdate.length; i += BATCH_SIZE) {
     const batch = notesToUpdate.slice(i, i + BATCH_SIZE);
+    console.error(`  Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(notesToUpdate.length / BATCH_SIZE)}: Processing ${batch.length} notes...`);
 
     const batchResults = await Promise.allSettled(
       batch.map(async (noteId) => {
         const details = await getNoteDetailsById(noteId);
         if (details) {
-          const contentHash = generateContentHash(details.content);
-          const existingHash = existingHashes.get(noteId);
-
-          // Only update if content actually changed
-          if (contentHash !== existingHash) {
-            await processNote(details);
-          }
+          // Modification date already checked - just process
+          await processNote(details);
         }
       })
     );
@@ -175,10 +187,12 @@ export async function syncNotes(): Promise<IndexingResult> {
         processedNotes++;
       } else {
         failedNotes++;
+        console.error("Failed to sync note:", result.reason);
       }
     }
 
     await updateJobProgress(jobId, processedNotes, failedNotes);
+    console.error(`  ✅ Progress: ${processedNotes}/${totalNotes} (${failedNotes} failed)`);
   }
 
   await completeJob(jobId, "completed");

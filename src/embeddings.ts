@@ -3,20 +3,45 @@ import { pipeline, type FeatureExtractionPipeline } from "@huggingface/transform
 // Singleton extractor instance
 let extractor: FeatureExtractionPipeline | null = null;
 
+// Promise to track model loading (prevents race condition)
+let loadingPromise: Promise<FeatureExtractionPipeline> | null = null;
+
 // Model configuration
 const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 export const EMBEDDING_DIMENSIONS = 384;
 
 /**
- * Initialize the embedding pipeline (lazy loading)
+ * Initialize the embedding pipeline (lazy loading with race condition protection)
  */
 async function getExtractor(): Promise<FeatureExtractionPipeline> {
-  if (!extractor) {
-    console.error("Loading embedding model...");
-    extractor = await pipeline("feature-extraction", MODEL_NAME);
-    console.error("Embedding model loaded.");
+  if (extractor) {
+    return extractor;
   }
-  return extractor;
+
+  // If already loading, wait for it
+  if (loadingPromise) {
+    return loadingPromise;
+  }
+
+  // Start loading
+  loadingPromise = (async () => {
+    console.error("🤖 Loading embedding model...");
+    const modelStart = performance.now();
+    extractor = await pipeline("feature-extraction", MODEL_NAME);
+    const modelTime = Math.round(performance.now() - modelStart);
+    console.error(`✅ Embedding model loaded in ${modelTime}ms`);
+    loadingPromise = null;
+    return extractor;
+  })();
+
+  return loadingPromise;
+}
+
+/**
+ * Pre-load the model before batch processing
+ */
+export async function preloadModel(): Promise<void> {
+  await getExtractor();
 }
 
 /**
