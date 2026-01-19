@@ -117,7 +117,24 @@ After configuration, restart Claude Code CLI or reload VS Code to activate the M
 
 ## Getting Started
 
-Start by indexing your notes. Ask Claude to index your notes by saying something like: "Index my notes" or "Index my Apple Notes".
+### Initial Indexing
+
+For the first time setup or full re-indexing, **use the CLI script** to avoid MCP timeout issues:
+
+```bash
+cd /Users/don/mcp/mcp-apple-notes-rag
+bun run-index.ts
+```
+
+This will index all your notes and show real-time progress. For ~1000 notes, expect about 14 minutes.
+
+### Incremental Updates
+
+After initial indexing, use the MCP tools to keep notes in sync:
+- **Via CLI**: `bun run-sync.ts` (faster for many changes)
+- **Via AI assistant**: "Sync my Apple Notes" (uses MCP `sync-notes` tool)
+
+The sync is much faster (~5 seconds if no changes) and won't timeout.
 
 ## CLI Scripts
 

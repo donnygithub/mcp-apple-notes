@@ -86,7 +86,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "index-notes",
         description:
-          "Index all Apple Notes for semantic search. This processes notes in batches and returns a job ID for tracking progress.",
+          "Index all Apple Notes for semantic search. WARNING: For large collections (500+ notes), this may timeout. Use CLI script 'bun run-index.ts' instead for initial indexing. This tool is best for re-indexing small subsets or checking if indexing is needed.",
         inputSchema: {
           type: "object",
           properties: {},
