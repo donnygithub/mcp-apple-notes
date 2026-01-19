@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS notes (
     creation_date TIMESTAMPTZ,
     modification_date TIMESTAMPTZ,
     content_hash TEXT,
+    has_images BOOLEAN DEFAULT FALSE,
     embedding vector(384),
     indexed_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -43,3 +44,4 @@ CREATE INDEX IF NOT EXISTS idx_notes_content_trgm ON notes USING gin (content gi
 CREATE INDEX IF NOT EXISTS idx_notes_modification ON notes (modification_date DESC);
 CREATE INDEX IF NOT EXISTS idx_notes_content_hash ON notes (content_hash);
 CREATE INDEX IF NOT EXISTS idx_notes_apple_note_id ON notes (apple_note_id);
+CREATE INDEX IF NOT EXISTS idx_notes_has_images ON notes (has_images);

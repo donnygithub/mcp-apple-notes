@@ -59,7 +59,9 @@ psql apple_notes -c "CREATE EXTENSION vector; CREATE EXTENSION pg_trgm;"
 bun run setup-db
 ```
 
-**Note:** If using a non-standard port (e.g., PostgreSQL 18 on port 5434), update your `.env` file accordingly.
+**Note:** If using a non-standard port (e.g., PostgreSQL 18 on port 5434), you must update:
+- Your `.env` file
+- The `DATABASE_URL` in your MCP configuration (see Usage section below)
 
 4. Configure environment:
 
@@ -90,7 +92,9 @@ cp .env.example .env
 }
 ```
 
-Important: Replace `<YOUR_USER_NAME>` with your actual username.
+**Important:**
+- Replace `<YOUR_USER_NAME>` with your actual username
+- If using a non-standard PostgreSQL port (e.g., 5434), update the port in `DATABASE_URL` to match your setup
 
 3. Restart Claude desktop app. You should see this:
 
@@ -129,6 +133,93 @@ bun list-large-notes.ts 10 1000000 # Top 10 notes > 1MB
 | `get-note` | Get full note content by title |
 | `search-notes` | Hybrid semantic + full-text search |
 | `create-note` | Create new Apple Note |
+
+## Example Prompts
+
+Once configured, you can use natural language with Claude to interact with your Apple Notes:
+
+### Initial Setup & Indexing
+
+```
+"Index all my Apple Notes so I can search them"
+
+"What's the status of my notes indexing job?"
+
+"How many notes are currently indexed?"
+```
+
+### Searching Notes
+
+**Use natural language (not JSON format):**
+
+```
+"Search my notes for anything related to 'kubernetes deployment strategies'"
+
+"Find notes about PostgreSQL performance tuning"
+
+"Search for notes in my 'Work' folder about 'MCP servers'"
+
+"What notes do I have about Python async programming?"
+
+"Find my oldest notes created before 2020"
+
+"Search for notes about 'docker' modified in the last month"
+
+"Show me notes about 'MCP' sorted by creation date, oldest first"
+
+"List all notes that contain images. Just titles only."
+
+"Find text-only notes about Python (no images)"
+```
+
+The search tool now supports:
+- **Date filtering**: Filter by creation or modification date
+- **Image filtering**: Find notes with or without images
+- **Custom sorting**: Sort by relevance (default), creation date, or modification date
+- **Title-only results**: Get just titles for large result sets (prevents context overflow)
+- **Flexible queries**: Combine semantic search with multiple filters
+
+**Note**: When listing many notes (e.g., "all notes with images"), add "just titles only" to avoid overwhelming the context window.
+
+### Retrieving Specific Notes
+
+```
+"Get the full content of my note titled 'Meeting Notes - Q1 Planning'"
+
+"Show me my note called 'API Documentation'"
+```
+
+### Creating Notes
+
+```
+"Create a new Apple Note titled 'MCP Server Ideas' with:
+- Explore filesystem integration
+- Consider calendar sync
+- Research Slack MCP"
+
+"Create a note called 'Code Snippet - React Hook' with this code:
+[paste your code here]"
+```
+
+### Keeping in Sync
+
+```
+"Sync my Apple Notes to pick up any recent changes"
+
+"I just added some notes - sync them to the search index"
+```
+
+### Combined Workflows
+
+```
+"Search my notes for 'docker compose' examples, then show me the full content of the most relevant one"
+
+"Find all my notes about TypeScript, then create a summary note with the key points"
+
+"Search for notes about database migrations and help me write a new migration script based on what I've documented"
+```
+
+The MCP server uses **hybrid search** (semantic embeddings + full-text) to find the most relevant notes, so you can search by concepts and natural language, not just exact keywords!
 
 ## Troubleshooting
 

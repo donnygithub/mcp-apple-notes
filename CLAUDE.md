@@ -99,7 +99,7 @@ tail -n 50 -f ~/Library/Logs/Claude/mcp.log
 | `sync-notes` | Incremental sync - only processes changed notes |
 | `get-indexing-status` | Check indexing job progress |
 | `get-note` | Retrieve full note content by title |
-| `search-notes` | Hybrid semantic + full-text search |
+| `search-notes` | Hybrid semantic + full-text search with date filtering, image filtering, custom sorting, and title-only mode |
 | `create-note` | Create new Apple Note (HTML content) |
 
 ### Data Flow
@@ -130,6 +130,7 @@ CREATE TABLE notes (
     creation_date TIMESTAMPTZ,
     modification_date TIMESTAMPTZ,
     content_hash TEXT,          -- For incremental sync
+    has_images BOOLEAN,         -- For image filtering
     embedding vector(384),
     indexed_at TIMESTAMPTZ
 );
@@ -148,18 +149,23 @@ CREATE TABLE indexing_jobs (
 **Indexes**:
 - `ivfflat` on embedding for vector search
 - `gin_trgm_ops` on title/content for full-text search
-- B-tree on modification_date, content_hash
+- B-tree on modification_date, content_hash, has_images
 
 **Search Strategy** (`src/search.ts`):
 - Runs vector search and trigram FTS in parallel
 - Combines results using Reciprocal Rank Fusion (RRF, k=60)
-- Default limit: 20 results
+- Default limit: 20 results (customizable)
+- Supports date filtering (created_before, created_after, modified_before, modified_after)
+- Supports image filtering (has_images boolean)
+- Custom sorting by relevance, creation_date, or modification_date
+- Title-only mode to prevent context overflow with large result sets
 - Optional folder filtering
 
 **Batch Indexing** (`src/indexer.ts`):
 - Processes notes in batches of 50
 - Tracks progress via `indexing_jobs` table
 - Supports incremental sync via content hash comparison
+- Detects and flags notes containing images (via HTML analysis)
 - No more timeout issues for large collections
 
 ### Apple Notes Integration (`src/apple-notes.ts`)

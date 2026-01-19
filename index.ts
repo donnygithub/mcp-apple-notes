@@ -16,6 +16,15 @@ import { hybridSearch } from "./src/search.js";
 // Input schemas
 const QueryNotesSchema = z.object({
   query: z.string(),
+  created_before: z.string().optional(),
+  created_after: z.string().optional(),
+  modified_before: z.string().optional(),
+  modified_after: z.string().optional(),
+  has_images: z.boolean().optional(),
+  sort_by: z.enum(["relevance", "creation_date", "modification_date"]).optional(),
+  sort_order: z.enum(["asc", "desc"]).optional(),
+  limit: z.number().optional(),
+  title_only: z.boolean().optional(),
 });
 
 const GetNoteSchema = z.object({
@@ -119,11 +128,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "search-notes",
         description:
-          "Search for notes using hybrid semantic + full-text search. Returns the most relevant notes matching your query.",
+          "Search for notes using hybrid semantic + full-text search. Returns the most relevant notes matching your query. Supports date filtering, image filtering, and custom sorting.",
         inputSchema: {
           type: "object",
           properties: {
-            query: { type: "string" },
+            query: { type: "string", description: "Search query text" },
+            created_before: { type: "string", description: "Filter notes created before this date (ISO 8601 format, e.g., '2020-01-01')" },
+            created_after: { type: "string", description: "Filter notes created after this date (ISO 8601 format)" },
+            modified_before: { type: "string", description: "Filter notes modified before this date (ISO 8601 format)" },
+            modified_after: { type: "string", description: "Filter notes modified after this date (ISO 8601 format)" },
+            has_images: { type: "boolean", description: "Filter by notes that contain images (true) or don't contain images (false)" },
+            sort_by: {
+              type: "string",
+              enum: ["relevance", "creation_date", "modification_date"],
+              description: "Sort results by relevance (default), creation date, or modification date"
+            },
+            sort_order: {
+              type: "string",
+              enum: ["asc", "desc"],
+              description: "Sort order: ascending (oldest first) or descending (newest first). Default: desc for dates, desc for relevance"
+            },
+            limit: { type: "number", description: "Maximum number of results to return (default: 20)" },
+            title_only: { type: "boolean", description: "Return only note titles without content (useful for large result sets)" },
           },
           required: ["query"],
         },
@@ -241,14 +267,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "search-notes": {
-        const { query } = QueryNotesSchema.parse(args);
-        const results = await hybridSearch(query);
+        const params = QueryNotesSchema.parse(args);
+        const results = await hybridSearch(
+          params.query,
+          params.limit || 20,
+          {
+            created_before: params.created_before,
+            created_after: params.created_after,
+            modified_before: params.modified_before,
+            modified_after: params.modified_after,
+            has_images: params.has_images,
+            sort_by: params.sort_by,
+            sort_order: params.sort_order,
+          }
+        );
         if (results.length === 0) {
           return createTextResponse(
             "No matching notes found. Make sure notes are indexed using 'index-notes' first."
           );
         }
-        return createTextResponse(JSON.stringify(results, null, 2));
+
+        // If title_only is requested, strip content
+        if (params.title_only) {
+          const titleResults = results.map(r => ({ title: r.title }));
+          return createTextResponse(JSON.stringify(titleResults, null, 2));
+        }
+
+        // Otherwise truncate content to prevent overflow
+        const truncatedResults = results.map(r => ({
+          title: r.title,
+          content: r.content.length > 500 ? r.content.substring(0, 500) + "..." : r.content,
+          score: r.score
+        }));
+        return createTextResponse(JSON.stringify(truncatedResults, null, 2));
       }
 
       case "create-note": {

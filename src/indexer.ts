@@ -45,6 +45,14 @@ function htmlToMarkdown(html: string): string {
 }
 
 /**
+ * Detect if HTML content contains images
+ */
+function hasImages(html: string): boolean {
+  // Check for <img> tags or base64 encoded images
+  return /<img[^>]+>/i.test(html) || /data:image\//i.test(html);
+}
+
+/**
  * Start a full indexing job (all notes)
  * Returns immediately with job ID - processing happens in background
  */
@@ -234,6 +242,9 @@ async function processNote(note: AppleNoteDetails): Promise<void> {
   // Generate content hash
   const contentHash = generateContentHash(note.content);
 
+  // Detect if note contains images
+  const noteHasImages = hasImages(note.content);
+
   // Generate embedding
   const textForEmbedding = prepareTextForEmbedding(note.title, markdownContent);
   const embedding = await generateEmbedding(textForEmbedding);
@@ -248,6 +259,7 @@ async function processNote(note: AppleNoteDetails): Promise<void> {
     creation_date: new Date(note.creation_date),
     modification_date: new Date(note.modification_date),
     content_hash: contentHash,
+    has_images: noteHasImages,
     embedding,
   });
 }

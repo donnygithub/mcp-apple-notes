@@ -25,6 +25,7 @@ export interface NoteRecord {
   creation_date: Date | null;
   modification_date: Date | null;
   content_hash: string | null;
+  has_images: boolean | null;
   embedding: number[] | null;
   indexed_at: Date;
 }
@@ -73,12 +74,13 @@ export async function upsertNote(note: {
   creation_date?: Date;
   modification_date?: Date;
   content_hash?: string;
+  has_images?: boolean;
   embedding?: number[];
 }): Promise<number> {
   const result = await pool.query(
     `INSERT INTO notes (apple_note_id, title, content, html_content, folder_path,
-                        creation_date, modification_date, content_hash, embedding, indexed_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+                        creation_date, modification_date, content_hash, has_images, embedding, indexed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
      ON CONFLICT (apple_note_id)
      DO UPDATE SET
        title = EXCLUDED.title,
@@ -88,6 +90,7 @@ export async function upsertNote(note: {
        creation_date = EXCLUDED.creation_date,
        modification_date = EXCLUDED.modification_date,
        content_hash = EXCLUDED.content_hash,
+       has_images = EXCLUDED.has_images,
        embedding = EXCLUDED.embedding,
        indexed_at = NOW()
      RETURNING id`,
@@ -100,6 +103,7 @@ export async function upsertNote(note: {
       note.creation_date || null,
       note.modification_date || null,
       note.content_hash || null,
+      note.has_images || false,
       note.embedding ? `[${note.embedding.join(",")}]` : null,
     ]
   );
