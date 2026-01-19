@@ -86,7 +86,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "index-notes",
         description:
-          "Check if initial indexing is needed and provide CLI instructions. For first-time setup or databases with fewer than 100 notes, this tool will return instructions to use the CLI command 'bun run-index.ts' instead of attempting to index (which would timeout). Only attempts actual indexing if notes already exist in the database.",
+          "Check indexing status and provide guidance. If notes are already indexed (> 100 notes in DB), returns status and available actions. If no notes indexed, provides CLI instructions. Only attempts re-indexing for small collections (< 100 notes).",
         inputSchema: {
           type: "object",
           properties: {},
@@ -201,13 +201,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "index-notes": {
-        // Check if this is initial indexing (no notes in DB yet)
+        // Check current indexing status
         const noteCount = await getNotesCount();
 
-        if (noteCount === 0 || noteCount < 100) {
-          // First time or very few notes - recommend CLI
+        if (noteCount === 0) {
+          // No notes indexed yet - provide CLI instructions
           return createTextResponse(
-            `⚠️  Initial indexing should be done via CLI to avoid timeouts.\n\n` +
+            `⚠️  No notes indexed yet. Initial indexing should be done via CLI to avoid timeouts.\n\n` +
             `Please run this command in your terminal:\n\n` +
             `  cd /Users/don/mcp/mcp-apple-notes-rag\n` +
             `  bun run-index.ts\n\n` +
@@ -216,7 +216,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           );
         }
 
-        // If notes already exist, allow re-indexing (user knows what they're doing)
+        if (noteCount > 100) {
+          // Notes already indexed - just report status
+          return createTextResponse(
+            `✅ Notes are already indexed!\n\n` +
+            `- Total notes in database: ${noteCount}\n\n` +
+            `You can:\n` +
+            `- Search notes using 'search-notes' tool\n` +
+            `- Sync updates using 'sync-notes' tool\n` +
+            `- Get a specific note using 'get-note' tool\n\n` +
+            `Note: If you need to fully re-index all notes, use CLI: bun run-index.ts`
+          );
+        }
+
+        // Only allow re-indexing if < 100 notes (small collection)
         const result = await startFullIndexing();
         return createTextResponse(
           `Indexing completed!\n` +
