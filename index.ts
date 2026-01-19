@@ -86,7 +86,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "index-notes",
         description:
-          "Index all Apple Notes for semantic search. WARNING: For large collections (500+ notes), this may timeout. Use CLI script 'bun run-index.ts' instead for initial indexing. This tool is best for re-indexing small subsets or checking if indexing is needed.",
+          "Check if initial indexing is needed and provide CLI instructions. For first-time setup or databases with fewer than 100 notes, this tool will return instructions to use the CLI command 'bun run-index.ts' instead of attempting to index (which would timeout). Only attempts actual indexing if notes already exist in the database.",
         inputSchema: {
           type: "object",
           properties: {},
@@ -201,6 +201,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "index-notes": {
+        // Check if this is initial indexing (no notes in DB yet)
+        const noteCount = await getNotesCount();
+
+        if (noteCount === 0 || noteCount < 100) {
+          // First time or very few notes - recommend CLI
+          return createTextResponse(
+            `⚠️  Initial indexing should be done via CLI to avoid timeouts.\n\n` +
+            `Please run this command in your terminal:\n\n` +
+            `  cd /Users/don/mcp/mcp-apple-notes-rag\n` +
+            `  bun run-index.ts\n\n` +
+            `This will index all your notes and show real-time progress.\n` +
+            `After completion, use the 'sync-notes' tool for incremental updates.`
+          );
+        }
+
+        // If notes already exist, allow re-indexing (user knows what they're doing)
         const result = await startFullIndexing();
         return createTextResponse(
           `Indexing completed!\n` +
