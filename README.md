@@ -20,9 +20,10 @@ A [Model Context Protocol (MCP)](https://www.anthropic.com/news/model-context-pr
 ## Prerequisites
 
 - [Bun](https://bun.sh/docs/installation)
-- [PostgreSQL 17+](https://www.postgresql.org/) with [pgvector](https://github.com/pgvector/pgvector) and pg_trgm extensions
+- [PostgreSQL 17+](https://www.postgresql.org/download/) with [pgvector](https://github.com/pgvector/pgvector) and pg_trgm extensions
 - [Claude Desktop](https://claude.ai/download)
 - macOS (required for Apple Notes access)
+- Optional: [pgAdmin](https://www.pgadmin.org) - GUI for database management
 
 ## Installation
 
