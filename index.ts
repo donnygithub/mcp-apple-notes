@@ -96,7 +96,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "sync-notes",
         description:
-          "Incrementally sync Apple Notes - only processes new or modified notes since last sync. Much faster than full indexing.",
+          "Incrementally sync Apple Notes - only processes new or modified notes. For large collections (> 500 notes), this tool will recommend using CLI 'bun run-sync.ts' to avoid timeouts. For small collections (< 500 notes), performs sync via MCP.",
         inputSchema: {
           type: "object",
           properties: {},
@@ -243,6 +243,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "sync-notes": {
+        // Check if notes are indexed
+        const noteCount = await getNotesCount();
+
+        if (noteCount === 0) {
+          // No notes indexed - guide to initial indexing first
+          return createTextResponse(
+            `⚠️  No notes indexed yet. Please run initial indexing first:\n\n` +
+            `  cd /Users/don/mcp/mcp-apple-notes-rag\n` +
+            `  bun run-index.ts\n\n` +
+            `After indexing completes, use this sync tool for incremental updates.`
+          );
+        }
+
+        // For large collections, recommend CLI to avoid timeout
+        if (noteCount > 500) {
+          return createTextResponse(
+            `⚠️  Large note collection detected (${noteCount} notes).\n\n` +
+            `The sync operation may timeout via MCP. For best results, use CLI:\n\n` +
+            `  cd /Users/don/mcp/mcp-apple-notes-rag\n` +
+            `  bun run-sync.ts\n\n` +
+            `This will complete in ~5-10 seconds and show real-time progress.\n\n` +
+            `Note: Sync timeouts are typically caused by:\n` +
+            `- Large number of notes to check\n` +
+            `- Slow JXA communication with Apple Notes\n` +
+            `- Network connectivity issues`
+          );
+        }
+
+        // Small collection - allow sync via MCP
         const result = await syncNotes();
         return createTextResponse(
           `Sync completed!\n` +
